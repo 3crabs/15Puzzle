@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Пятнашки</title>
+
+		<link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700" rel="stylesheet">
+		
+		<style>
+			.game-frame {
+				min-height: 100vh;
+				margin: 0;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				text-align: center;
+				font-family: "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
+				color: #34495e;
+			}
+
+			.puzzle__heading {
+				color: #2c3e50;
+			}
+
+			.puzzle__grid {
+				margin: 0 auto;
+			}
+
+			.puzzle__tile {
+				box-sizing: border-box;
+				height: 7em;
+				width: 7em;
+				padding: 0;
+				text-align: center;
+				vertical-align: top;
+				border: 0;
+				border-radius: .2em;
+				background-color: #b94283;
+				color: #fff;
+				user-select: none;
+				cursor: pointer;
+				transition: background-color .25s, border-color .25s;
+			}
+
+			[free="true"] {
+				background-color: transparent;
+				border: 1px solid #e8e8e8;
+				outline: none;
+				cursor: default;
+			}
+		</style>
+	</head>
+
+	<body class="game-frame">
+		<section>
+			<h1 class="puzzle__heading">Пятнашки</h1>
+			<div id="puzzle"></div>
+		</section>
+	</body>
+
+	<script src="https://vuejs.org/js/vue.js"></script>
+
+	<script>
+		const gridDimension = 4;
+		const nbrOfTiles = Math.pow(gridDimension, 2);
+
+        // Создание и заполнение массива фишек номерами
+		let tiles = [];
+
+		for (let i = 1; i <= nbrOfTiles; i++) {
+			tiles.push(i);
+		}
+
+        // Создание и заполнение двухмерного массива c победной расстановкой.
+        // С ним будет проходить сравнение после каждого хода, чтобы определить победу.
+		let puzzleGridVictory = [];
+
+		function initialisePuzzleGridVictory() {
+			let i = 0;
+			for (let j = 0; j < gridDimension; j++) {
+				let row = [];
+				for (let k = 0; k < gridDimension; k++) {
+					row.push({
+						state: {
+							label: tiles[i] == nbrOfTiles ? (tiles[i++], '') : tiles[i++],
+						},
+					})
+				}
+				puzzleGridVictory.push(row);
+			}
+			return puzzleGridVictory;
+		}
+
+		initialisePuzzleGridVictory();
+
+        // Перемешивание массива фишек
+		function shuffleArray(array) {
+			for (let i = array.length - 1; i > 0; i--) {
+				let j = Math.floor(Math.random() * (i + 1));
+				[array[i], array[j]] = [array[j], array[i]];
+			}
+		}
+
+		shuffleArray(tiles);
+
+        // Создание двухмерного массива поля
+        // Каждая плитка содержит координаты x,y и признак свободности free
+		let puzzleGrid = [];
+
+		function initialisePuzzleGrid() {
+			let i = 0;
+			for (let j = 0; j < gridDimension; j++) {
+				let row = [];
+				for (let k = 0; k < gridDimension; k++) {
+					row.push({
+						coordinates: {
+							x: k,
+							y: j,
+						},
+						state: {
+							free: tiles[i] == nbrOfTiles ? true : false,
+							label: tiles[i] == nbrOfTiles ? (tiles[i++], '') : tiles[i++],
+						},
+					})
+				}
+				puzzleGrid.push(row);
+			}
+			return puzzleGrid;
+		}
+
+		initialisePuzzleGrid();
+
+        // Компонент фишки
+		Vue.component('puzzle-tile', {
+			props: ['tile'],
+			template: `
+			<button
+				class="puzzle__tile"
+				:free="tile.state.free"
+				@click="move(tile.coordinates.x, tile.coordinates.y)"
+			>
+				{{ tile.state.label }}
+			</button>`,
+			methods: {
+				move: function(x, y) {
+                    // Проверка на наличие свободной клетки рядом
+                    // Если есть отправить событие successfulMove родителю и вызвать swap()
+					if ((y - 1 >= 0) && (puzzleGrid[y - 1][x].state.free == true)) {
+						this.$emit('successfulMove');
+						this.swap('up', x, y);
+					} else if ((y + 1 <= gridDimension - 1) && (puzzleGrid[y + 1][x].state.free == true)) {
+						this.$emit('successfulMove');
+						this.swap('down', x, y);
+					} else if ((x - 1 >= 0) && (puzzleGrid[y][x - 1].state.free == true)) {
+						this.$emit('successfulMove');
+						this.swap('left', x, y);
+					} else if ((x + 1 <= gridDimension - 1) && (puzzleGrid[y][x + 1].state.free == true)) {
+						this.$emit('successfulMove');
+						this.swap('right', x, y);
+					} else {
+						this.$emit('specialEvent', 'Эту фишку нельзя передвинуть');
+						return false;
+					}
+				},
+				swap: function(direction, x, y) {
+                    // Переместить фишку на свободное место и проверить условие победы
+					if (direction == 'up') {
+						[puzzleGrid[y][x].state, puzzleGrid[y - 1][x].state] = [puzzleGrid[y - 1][x].state, puzzleGrid[y][x].state];
+					} else if (direction == 'down') {
+						[puzzleGrid[y][x].state, puzzleGrid[y + 1][x].state] = [puzzleGrid[y + 1][x].state, puzzleGrid[y][x].state];
+					} else if (direction == 'left') {
+						[puzzleGrid[y][x].state, puzzleGrid[y][x - 1].state] = [puzzleGrid[y][x - 1].state, puzzleGrid[y][x].state];
+					} else if (direction == 'right') {
+						[puzzleGrid[y][x].state, puzzleGrid[y][x + 1].state] = [puzzleGrid[y][x + 1].state, puzzleGrid[y][x].state];
+                    }
+                    this.checkVictory();
+				},
+				checkVictory: function() {
+                    // Проверка условия победы, сравниваем поле с победной комбинацией
+					for (let i = 0; i < gridDimension; i++) {
+						for (let j = 0; j < gridDimension; j++) {
+							if (puzzleGrid[i][j].state.label !== puzzleGridVictory[i][j].state.label) {
+								return false;
+							}
+						}
+					}
+					this.$emit('specialEvent', 'Победа!');
+					return true;
+				}
+			},
+		});
+
+        // Главный компонет. Поле
+		var app = new Vue({
+			el: '#puzzle',
+			data: {
+				puzzleGrid,
+				statut: 'Для старта игры кликните по фишке',
+				moves: 0,
+			},
+			template: `
+				<div class="puzzle__board">
+					<table class="puzzle__grid">
+						<tr v-for="row in puzzleGrid">
+							<td v-for="tile in row">
+								<puzzle-tile
+									:tile="tile"
+									v-on:successfulMove="incrementTotalMoves"
+									v-on:specialEvent="updateStatut">
+								</puzzle-tile>
+							</td>
+						</tr>
+					</table>
+
+					<p class="puzzle__statut" v-html="statut"></p>
+				</div>`,
+			methods: {
+				updateStatut: function(statut) {
+					this.statut = statut;
+				},
+				incrementTotalMoves: function () {
+					this.moves += 1;
+					this.statut = 'Ходов' + (this.moves > 1 ? ': ' : ': ') + '<b>' + this.moves + '</b>';
+				},
+			},
+		});
+	</script>
+</html>
